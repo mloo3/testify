@@ -161,7 +161,7 @@ func Run(t *testing.T, suite TestingSuite) {
 		tests = append(tests, test)
 	}
 	if suiteSetupDone {
-		defer func() {
+		cleanupFn := func() {
 			if tearDownAllSuite, ok := suite.(TearDownAllSuite); ok {
 				tearDownAllSuite.TearDownSuite()
 			}
@@ -170,7 +170,12 @@ func Run(t *testing.T, suite TestingSuite) {
 				stats.End = time.Now()
 				suiteWithStats.HandleStats(suiteName, stats)
 			}
-		}()
+		}
+		if c, ok := testing.TB(t).(cleanup); ok {
+			c.Cleanup(cleanupFn)
+		} else {
+			defer cleanupFn()
+		}
 	}
 
 	runTests(t, tests)
@@ -206,4 +211,8 @@ func runTests(t testing.TB, tests []testing.InternalTest) {
 
 type runner interface {
 	Run(name string, f func(t *testing.T)) bool
+}
+
+type cleanup interface {
+	Cleanup(func())
 }
