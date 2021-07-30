@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -586,4 +588,63 @@ func (s *FailfastSuite) Test_A_Fails() {
 func (s *FailfastSuite) Test_B_Passes() {
 	s.call("Test B Passes")
 	s.Require().True(true)
+}
+
+type ParallelSuite struct {
+	Suite
+	callsLock  sync.Mutex
+	calls      []string
+	callsIndex map[string]int
+}
+
+func (s *ParallelSuite) call(method string) {
+	time.Sleep(time.Duration(rand.Intn(300)) * time.Millisecond)
+	s.callsLock.Lock()
+	defer s.callsLock.Unlock()
+	s.calls = append(s.calls, method)
+	s.callsIndex[method] = len(s.calls) - 1
+}
+
+func TestSuiteParallel(t *testing.T) {
+	s := &ParallelSuite{
+		callsIndex: make(map[string]int, 8),
+	}
+	Run(t, s)
+}
+
+func (s *ParallelSuite) SetupSuite() {
+	s.call("SetupSuite")
+}
+
+func (s *ParallelSuite) TearDownSuite() {
+	s.call("TearDownSuite")
+	s.callsLock.Lock()
+	defer s.callsLock.Unlock()
+	// first 3 calls and last call is known ordering
+	assert.Equal(s.T(), []string{"SetupSuite", "BeforeTest Test_A", "BeforeTest Test_B"}, s.calls[:3])
+	assert.Equal(s.T(), "TearDownSuite", s.calls[len(s.calls)-1])
+	// should have these calls
+	assert.Subset(s.T(), s.calls, []string{"Test_A", "AfterTest Test_A", "Test_B", "AfterTest Test_B"})
+	// there won't be any other ordering guarantees between tests A and B since they are run in parallel,
+	// but verify that AfterTest is run after the test
+	assert.Greater(s.T(), s.callsIndex["AfterTest Test_A"], s.callsIndex["Test_A"])
+	assert.Greater(s.T(), s.callsIndex["AfterTest Test_B"], s.callsIndex["Test_B"])
+}
+
+func (s *ParallelSuite) BeforeTest(suiteName, testName string) {
+	s.call(fmt.Sprintf("BeforeTest %s", testName))
+}
+
+func (s *ParallelSuite) AfterTest(suiteName, testName string) {
+	s.call(fmt.Sprintf("AfterTest %s", testName))
+}
+
+func (s *ParallelSuite) Test_A() {
+	s.T().Parallel()
+	s.call("Test_A")
+}
+
+func (s *ParallelSuite) Test_B() {
+	s.T().Parallel()
+	s.call("Test_B")
 }

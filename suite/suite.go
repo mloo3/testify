@@ -173,7 +173,7 @@ func Run(t *testing.T, suite TestingSuite) {
 		}()
 	}
 
-	runTests(t, tests)
+	runTests(suite, t, tests)
 }
 
 // Filtering method according to set regular expression
@@ -185,7 +185,7 @@ func methodFilter(name string) (bool, error) {
 	return regexp.MatchString(*matchMethod, name)
 }
 
-func runTests(t testing.TB, tests []testing.InternalTest) {
+func runTests(suite TestingSuite, t testing.TB, tests []testing.InternalTest) {
 	if len(tests) == 0 {
 		t.Log("warning: no tests to run")
 		return
@@ -199,9 +199,12 @@ func runTests(t testing.TB, tests []testing.InternalTest) {
 		return
 	}
 
-	for _, test := range tests {
-		r.Run(test.Name, test.F)
-	}
+	r.Run("All", func(t *testing.T) {
+		suite.SetT(t)
+		for _, test := range tests {
+			t.Run(test.Name, test.F)
+		}
+	})
 }
 
 type runner interface {
