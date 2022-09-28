@@ -517,6 +517,10 @@ func (s *suiteWithStats) TestSomething(t *suite.T) {
 	t.Equal(1, 1)
 }
 
+func (s *suiteWithStats) TestPanic() {
+	panic("oops")
+}
+
 func TestSuiteWithStats(t *testing.T) {
 	suiteWithStats := new(suiteWithStats)
 	suite.Run(t, suiteWithStats)
@@ -524,12 +528,17 @@ func TestSuiteWithStats(t *testing.T) {
 	assert.True(t, suiteWithStats.wasCalled)
 	assert.NotZero(t, suiteWithStats.stats.Start)
 	assert.NotZero(t, suiteWithStats.stats.End)
-	assert.True(t, suiteWithStats.stats.Passed())
+	assert.False(t, suiteWithStats.stats.Passed())
 
-	testStats := suiteWithStats.stats.TestStats["TestSomething"]
-	assert.NotZero(t, testStats.Start)
-	assert.NotZero(t, testStats.End)
-	assert.True(t, testStats.Passed)
+	testStats := suiteWithStats.stats.TestStats
+
+	assert.NotZero(t, testStats["TestSomething"].Start)
+	assert.NotZero(t, testStats["TestSomething"].End)
+	assert.True(t, testStats["TestSomething"].Passed)
+
+	assert.NotZero(t, testStats["TestPanic"].Start)
+	assert.NotZero(t, testStats["TestPanic"].End)
+	assert.False(t, testStats["TestPanic"].Passed)
 }
 
 // FailfastSuite will test the behavior when running with the failfast flag

@@ -130,8 +130,12 @@ func (t *T) Require() *require.Assertions {
 	return t.require
 }
 
-func failOnPanic(t *T) {
+func recoverAndFailOnPanic(t *T) {
 	r := recover()
+	failOnPanic(t, r)
+}
+
+func failOnPanic(t *T, r interface{}) {
 	if r != nil {
 		t.Errorf("test panicked: %v\n%s", r, debug.Stack())
 		t.FailNow()
@@ -156,7 +160,7 @@ func Run(testingT *testing.T, suite interface{}) {
 	t := &T{}
 	t.setT(testingT)
 
-	defer failOnPanic(t)
+	defer recoverAndFailOnPanic(t)
 
 	var suiteSetupDone bool
 
@@ -200,20 +204,22 @@ func Run(testingT *testing.T, suite interface{}) {
 				t := &T{}
 				t.setT(testingT)
 
-				defer failOnPanic(t)
+				defer recoverAndFailOnPanic(t)
 
 				defer func() {
-					if stats != nil {
-						passed := !t.Failed()
-						stats.end(method.Name, passed)
-					}
+					r := recover()
 
-					if tearDownTestSuite, ok := suite.(TearDownTestSuite); ok {
-						tearDownTestSuite.TearDownTest(t)
+					if stats != nil {
+						passed := !t.Failed() && r == nil
+						stats.end(method.Name, passed)
 					}
 
 					if afterTestSuite, ok := suite.(AfterTest); ok {
 						afterTestSuite.AfterTest(t, suiteName, method.Name)
+					}
+
+					if tearDownTestSuite, ok := suite.(TearDownTestSuite); ok {
+						tearDownTestSuite.TearDownTest(t)
 					}
 				}()
 
